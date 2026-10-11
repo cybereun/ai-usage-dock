@@ -37,9 +37,9 @@ function build(){
   $('ns').innerHTML=Object.entries(S.services).map(([k,v])=>`<option value="${k}">${v.name}</option>`).join('');
   $('list').innerHTML=S.accounts.map(a=>{const v=S.services[a.service]||{name:a.service,color:'#60a5fa'};return `<div class="box acc" style="--c:${v.color}" data-id="${a.id}">
 <div class="row"><span class="badge">${v.name}</span><input class="w" data-k="label" value="${esc(a.label)}" placeholder="별명">
-<select data-k="mode"><option value="auto"${a.mode==='auto'?' selected':''}>자동 읽기</option><option value="manual"${a.mode==='manual'?' selected':''}>수동 입력</option></select>
+<select data-k="mode"><option value="auto"${a.mode==='auto'?' selected':''}>자동 읽기</option><option value="manual"${a.mode==='manual'?' selected':''}>수동 입력</option>${a.service==='antigravity'?`<option value="cli"${a.mode==='cli'?' selected':''}>CLI 읽기 (agy)</option>`:''}</select>
 <button class="g" data-a="up">▲</button><button class="g" data-a="dn">▼</button><button class="d" data-a="rm">삭제</button></div>
-${a.mode==='auto'?`<div class="row"><input class="w" data-k="url" value="${esc(a.url)}" placeholder="사용량 화면 주소"><button data-a="login">로그인</button><button class="g" data-a="rf">지금 읽기</button></div>`
+${a.mode==='cli'?`<div class="row"><select data-k="group"><option value="Gemini Models"${a.group!=='Claude and GPT models'?' selected':''}>Gemini 모델</option><option value="Claude and GPT models"${a.group==='Claude and GPT models'?' selected':''}>Claude·GPT 모델</option></select><button class="g" data-a="rf">지금 읽기</button><span class="msg">agy CLI 의 /usage 로 자동 읽기</span></div>`:a.mode==='auto'?`<div class="row"><input class="w" data-k="url" value="${esc(a.url)}" placeholder="사용량 화면 주소"><button data-a="login">로그인</button><button class="g" data-a="rf">지금 읽기</button></div>`
 :`<div class="row">5시간 <input class="n" type="number" min="0" max="100" data-k="h5" value="${a.h5.pct}">% <input class="w" data-k="h5r" value="${esc(a.h5.reset)}" placeholder="초기화 시각 (선택)">
 주간 <input class="n" type="number" min="0" max="100" data-k="wk" value="${a.wk.pct}">% <input class="w" data-k="wkr" value="${esc(a.wk.reset)}" placeholder="초기화 시각 (선택)"></div>`}
 <div class="msg" data-st></div></div>`}).join('')||'<div class="box msg">아직 계정이 없어요. 아래에서 추가하세요.</div>';
@@ -52,7 +52,7 @@ function sync(s){S=s;if(!$('ns').options.length)$('ns').innerHTML=Object.entries
 api.getState().then(sync);api.onState(sync);
 $('add').onclick=()=>{api.add({service:$('ns').value,label:$('nl').value.trim()});$('nl').value=''};
 $('list').onchange=e=>{const el=e.target,id=el.closest('.acc').dataset.id,k=el.dataset.k,a=S.accounts.find(x=>x.id===id);if(!k)return;
- if(k==='mode'||k==='label'||k==='url')api.update(id,{[k]:el.value});
+ if(k==='mode'||k==='label'||k==='url'||k==='group')api.update(id,{[k]:el.value});
  else{const p=n=>Math.max(0,Math.min(100,+n||0));const patch={h5:{...a.h5},wk:{...a.wk}};
   if(k==='h5')patch.h5.pct=p(el.value);if(k==='h5r')patch.h5.reset=el.value;if(k==='wk')patch.wk.pct=p(el.value);if(k==='wkr')patch.wk.reset=el.value;api.update(id,patch)}};
 $('list').onclick=e=>{const b=e.target.closest('[data-a]');if(!b)return;const id=b.closest('.acc').dataset.id;({login:()=>api.login(id),rf:()=>api.refresh(id),up:()=>api.move(id,-1),dn:()=>api.move(id,1),rm:()=>confirm('이 계정을 삭제할까요?')&&api.remove(id)})[b.dataset.a]()};

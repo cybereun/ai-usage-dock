@@ -16,7 +16,7 @@ const SERVICES = {
   claude: { name: 'Claude', color: '#d97757', url: 'https://claude.ai/settings/usage', mode: 'auto' },
   codex: { name: 'Codex', color: '#10a37f', url: 'https://chatgpt.com/codex/cloud/settings/usage', mode: 'auto' },
   gemini: { name: 'Gemini', color: '#4f8cff', url: 'https://gemini.google.com/app', mode: 'manual' },
-  antigravity: { name: 'Antigravity', color: '#a855f7', url: '', mode: 'manual' },
+  antigravity: { name: 'Antigravity', color: '#a855f7', url: '', mode: 'cli' },
   grok: { name: 'Grok', color: '#9ca3af', url: 'https://grok.com', mode: 'manual' },
   custom: { name: '기타', color: '#f59e0b', url: '', mode: 'manual' },
 };
@@ -59,7 +59,19 @@ function parseUsage(text) {
 }
 
 const sleep = (ms) => new Promise(r => setTimeout(r, ms));
+const AGY = process.env.LOCALAPPDATA + '\\agy\\bin\\agy.exe';
+const fmtReset = (iso) => { const ms = Date.parse(iso) - Date.now(); if (!(ms > 0)) return ''; const m = Math.round(ms / 60000), d = Math.floor(m / 1440), h = Math.floor(m % 1440 / 60); return (d ? d + '일 ' : '') + (h ? h + '시간 ' : '') + (d ? '' : (m % 60) + '분 ') + '후 초기화'; };
+async function readAgy(acc) {
+  const out = await new Promise(res => execFile(fs.existsSync(AGY) ? AGY : 'agy', ['-p', '/usage', '--print-timeout', '25s'], { timeout: 45000, windowsHide: true }, (e, o) => res(o || '')));
+  const g = (acc.group || 'Gemini Models').toLowerCase();
+  const rows = out.split(/\r?\n/).map(l => l.split('\t')).filter(c => c.length >= 3 && c[0].trim().toLowerCase() === g);
+  const pick = (re) => { const c = rows.find(r => re.test(r[1])); return c ? { pct: Math.max(0, Math.min(100, Math.round(100 - parseFloat(c[2])))), reset: fmtReset(c[3]) } : null; };
+  const h5 = pick(/five hour/i), wk = pick(/weekly/i);
+  if (h5 || wk) Object.assign(acc, { h5: h5 || { pct: 0, reset: '' }, wk: wk || { pct: 0, reset: '' }, status: 'ok', msg: '', updated: Date.now() });
+  else { acc.status = 'error'; acc.msg = out.trim() ? '사용량 형식을 읽지 못했어요' : 'agy CLI 를 실행하지 못했어요 (설치·로그인 확인)'; }
+}
 async function readAccount(acc) {
+  if (acc.mode === 'cli') return readAgy(acc);
   if (acc.mode === 'manual') { acc.status = 'manual'; acc.updated = Date.now(); return; }
   if (!acc.url) { acc.status = 'error'; acc.msg = 'URL 이 비어 있어요'; return; }
   const exe = browserExe();
@@ -260,10 +272,14 @@ ipcMain.on('size', (_, h) => { h = Math.ceil(h); if (h !== widgetH) { widgetH = 
 ipcMain.on('hold', (_, v) => { pinned = !!v; });
 ipcMain.on('add', (_, { service, label }) => {
   const s = SERVICES[service] || SERVICES.custom;
+  if (service === 'antigravity') {
+    for (const [g, nm] of [['Gemini Models', 'Gemini 모델'], ['Claude and GPT models', 'Claude·GPT 모델']]) store.accounts.push({ id: uid(), service, group: g, label: [label, nm].filter(Boolean).join(' · '), url: '', mode: 'cli', h5: { pct: 0, reset: '' }, wk: { pct: 0, reset: '' }, status: 'idle', updated: 0 });
+    publish(); refresh(); return;
+  }
   store.accounts.push({ id: uid(), service, label: label || '', url: s.url, mode: s.mode, h5: { pct: 0, reset: '' }, wk: { pct: 0, reset: '' }, status: 'idle', updated: 0 });
   publish(); if (s.mode === 'auto') refresh(store.accounts[store.accounts.length - 1].id);
 });
-ipcMain.on('update', (_, { id, patch }) => { const a = store.accounts.find(x => x.id === id); if (a) { Object.assign(a, patch); if (a.mode === 'manual') { a.status = 'manual'; a.updated = Date.now(); } publish(); } });
+ipcMain.on('update', (_, { id, patch }) => { const a = store.accounts.find(x => x.id === id); if (a) { Object.assign(a, patch); if (a.mode === 'manual') { a.status = 'manual'; a.updated = Date.now(); } publish(); if (a.mode === 'cli' && (patch.mode || patch.group)) refresh(a.id); } });
 ipcMain.on('remove', (_, id) => { store.accounts = store.accounts.filter(a => a.id !== id); publish(); });
 ipcMain.on('move', (_, { id, dir }) => { const i = store.accounts.findIndex(a => a.id === id), j = i + dir; if (i < 0 || j < 0 || j >= store.accounts.length) return; [store.accounts[i], store.accounts[j]] = [store.accounts[j], store.accounts[i]]; publish(); });
 ipcMain.on('settings', (_, patch) => {
