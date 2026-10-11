@@ -47,7 +47,7 @@ ${a.mode==='auto'?`<div class="row"><input class="w" data-k="url" value="${esc(a
 function status(){document.querySelectorAll('.acc').forEach(el=>{const a=S.accounts.find(x=>x.id===el.dataset.id);if(!a)return;const m=el.querySelector('[data-st]');
  m.className='msg '+(a.status==='ok'?'ok':a.status==='login'||a.status==='error'?'bad':'');
  m.textContent=a.loading?'읽는 중…':a.status==='ok'?`읽기 성공 · 5시간 ${a.h5.pct}% · 주간 ${a.wk.pct}%`:a.status==='login'?'로그인이 필요해요 → [로그인] 후 창을 닫으면 자동으로 읽어요':a.status==='error'?a.msg:a.status==='manual'?'수동 입력 값을 사용 중':''})}
-function sync(s){S=s;const n=S.accounts.map(a=>a.id+a.mode+a.service).join();if(n!==sig){sig=n;build()}status();
+function sync(s){S=s;if(!$('ns').options.length)$('ns').innerHTML=Object.entries(S.services).map(([k,v])=>`<option value="${k}">${v.name}</option>`).join('');const n=S.accounts.map(a=>a.id+a.mode+a.service).join();if(n!==sig){sig=n;build()}status();
  $('tt').checked=S.settings.topTrigger;$('ct').checked=S.settings.clockTrigger;$('as').checked=S.settings.autoStart;if(document.activeElement!==$('iv'))$('iv').value=S.settings.intervalMin}
 api.getState().then(sync);api.onState(sync);
 $('add').onclick=()=>{api.add({service:$('ns').value,label:$('nl').value.trim()});$('nl').value=''};
