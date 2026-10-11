@@ -141,7 +141,7 @@ function tick() {
 }
 function openSettings() {
   if (settingsWin && !settingsWin.isDestroyed()) { settingsWin.show(); settingsWin.focus(); return; }
-  settingsWin = new BrowserWindow({ width: 920, height: 720, minWidth: 720, title: 'AI 사용량 — 설정', backgroundColor: '#0f1320', autoHideMenuBar: true, webPreferences: { preload: path.join(__dirname, 'preload.js') } });
+  settingsWin = new BrowserWindow({ width: 920, height: 720, minWidth: 720, title: 'AI 사용량 — 설정', icon: path.join(__dirname, 'icon.png'), backgroundColor: '#0f1320', autoHideMenuBar: true, webPreferences: { preload: path.join(__dirname, 'preload.js') } });
   settingsWin.loadFile(path.join(__dirname, 'settings.html'));
 }
 
@@ -171,7 +171,7 @@ function schedule() { clearInterval(timer); timer = setInterval(() => refresh(),
 
 app.whenReady().then(() => {
   load(); createWidget();
-  tray = new Tray(makeIcon()); tray.setToolTip('AI 사용량');
+  tray = new Tray(nativeImage.createFromPath(path.join(__dirname, 'icon.png')).resize({ width: 32, height: 32 })); tray.setToolTip('AI 사용량');
   const menu = () => Menu.buildFromTemplate([
     { label: '지금 보기 (Ctrl+Alt+U)', click: () => togglePin() },
     { label: '새로고침', click: () => refresh() },
