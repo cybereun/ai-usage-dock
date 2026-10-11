@@ -12,6 +12,8 @@ Claude · Codex · Antigravity 같은 AI 서비스의 **5시간 · 주간 사용
 [![Repo size](https://img.shields.io/github/repo-size/cybereun/ai-usage-dock?style=flat-square)](https://github.com/cybereun/ai-usage-dock)
 [![Maintained](https://img.shields.io/badge/maintained-yes-brightgreen?style=flat-square)](https://github.com/cybereun/ai-usage-dock/graphs/commit-activity)
 
+<p align="center"><img src="docs/screenshot.png" alt="AI 사용량 위젯 실제 화면" width="720"></p>
+
 ## 주요 특징
 
 - **독처럼 나타나는 위젯** — 화면 맨 위 가운데 또는 작업표시줄 시계(오른쪽 아래)에 마우스를 대면 슬라이드로 나타나고, 마우스가 떠나면 자동으로 접힙니다.
