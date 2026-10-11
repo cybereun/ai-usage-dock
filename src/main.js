@@ -4,7 +4,13 @@ const fs = require('fs');
 const zlib = require('zlib');
 
 app.userAgentFallback = app.userAgentFallback.replace(/ Electron\/\S+/, '').replace(/ ai-usage-dock\/\S+/, '');
+// 설정·로그인 정보는 C: 드라이브가 아니라 exe 옆 data 폴더에 저장
+app.setPath('userData', path.join(path.dirname(process.execPath), 'data'));
 if (!app.requestSingleInstanceLock()) app.quit();
+const { spawn, execFile } = require('child_process');
+// 구글 로그인은 앱 내장 브라우저를 막으므로, 설치된 Chrome(없으면 Edge)을 계정별 전용 프로필로 사용한다
+const browserExe = () => [process.env.ProgramFiles + '\\Google\\Chrome\\Application\\chrome.exe', process.env['ProgramFiles(x86)'] + '\\Google\\Chrome\\Application\\chrome.exe', process.env.LOCALAPPDATA + '\\Google\\Chrome\\Application\\chrome.exe', process.env['ProgramFiles(x86)'] + '\\Microsoft\\Edge\\Application\\msedge.exe', process.env.ProgramFiles + '\\Microsoft\\Edge\\Application\\msedge.exe'].find(p => fs.existsSync(p));
+const profileDir = (id) => path.join(app.getPath('userData'), 'profiles', id);
 
 const SERVICES = {
   claude: { name: 'Claude', color: '#d97757', url: 'https://claude.ai/settings/usage', mode: 'auto' },
@@ -56,22 +62,15 @@ const sleep = (ms) => new Promise(r => setTimeout(r, ms));
 async function readAccount(acc) {
   if (acc.mode === 'manual') { acc.status = 'manual'; acc.updated = Date.now(); return; }
   if (!acc.url) { acc.status = 'error'; acc.msg = 'URL 이 비어 있어요'; return; }
-  const w = new BrowserWindow({ show: false, width: 1100, height: 900, webPreferences: { partition: 'persist:acct-' + acc.id, backgroundThrottling: false } });
-  try {
-    w.loadURL(acc.url).catch(() => {});
-    await Promise.race([new Promise(r => w.webContents.once('did-finish-load', r)), sleep(20000)]);
-    let usage = null;
-    for (let i = 0; i < 8 && !usage; i++) {
-      await sleep(1500);
-      const text = await w.webContents.executeJavaScript('document.body.innerText').catch(() => '');
-      usage = parseUsage(text || '');
-    }
-    const cur = w.webContents.getURL();
-    if (usage) { Object.assign(acc, usage, { status: 'ok', msg: '', updated: Date.now() }); }
-    else if (/login|signin|sign-in|auth|accounts\.google|log-in/i.test(cur)) { acc.status = 'login'; acc.msg = '로그인이 필요해요'; }
-    else { acc.status = 'error'; acc.msg = '사용량을 찾지 못했어요 (로그인 확인 또는 수동 입력)'; }
-  } catch (e) { acc.status = 'error'; acc.msg = String(e.message || e); }
-  finally { if (!w.isDestroyed()) w.destroy(); }
+  const exe = browserExe();
+  if (!exe) { acc.status = 'error'; acc.msg = 'Chrome 또는 Edge 가 필요해요'; return; }
+  const html = await new Promise(res => execFile(exe, ['--headless=new', '--disable-gpu', '--no-first-run', '--user-data-dir=' + profileDir(acc.id), '--virtual-time-budget=12000', '--dump-dom', acc.url], { timeout: 45000, maxBuffer: 20 * 1024 * 1024 }, (e, out) => res(out || '')));
+  const text = html.replace(/<(script|style)[\s\S]*?<\/\1>/gi, ' ').replace(/<br\s*\/?>|<\/(p|div|li|h\d|tr|span|button)>/gi, '\n').replace(/<[^>]+>/g, ' ').replace(/&nbsp;/g, ' ').replace(/&amp;/g, '&').replace(/[ \t]+/g, ' ');
+  const usage = parseUsage(text);
+  if (usage) Object.assign(acc, usage, { status: 'ok', msg: '', updated: Date.now() });
+  else if (!text.trim()) { acc.status = 'error'; acc.msg = '페이지를 열지 못했어요 (로그인 창이 열려 있으면 닫아 주세요)'; }
+  else if (/log ?in|sign ?in|continue with|로그인|accounts\.google/i.test(text)) { acc.status = 'login'; acc.msg = '로그인이 필요해요'; }
+  else { acc.status = 'error'; acc.msg = '사용량을 찾지 못했어요 (주소 확인 또는 수동 입력)'; }
 }
 let busy = new Set();
 async function refresh(id) {
@@ -83,9 +82,9 @@ async function refresh(id) {
 }
 function openLogin(id) {
   const acc = store.accounts.find(a => a.id === id); if (!acc || !acc.url) return;
-  const w = new BrowserWindow({ width: 1000, height: 780, title: SERVICES[acc.service].name + ' 로그인 — 다 되면 창을 닫으세요', autoHideMenuBar: true, webPreferences: { partition: 'persist:acct-' + acc.id } });
-  w.loadURL(acc.url);
-  w.on('closed', () => refresh(acc.id));
+  const exe = browserExe(); if (!exe) return;
+  const p = spawn(exe, ['--user-data-dir=' + profileDir(id), '--no-first-run', '--no-default-browser-check', '--new-window', acc.url], { detached: true, stdio: 'ignore' });
+  p.on('exit', () => refresh(acc.id));
 }
 
 // ---------- 창 ----------
