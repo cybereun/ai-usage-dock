@@ -1,4 +1,4 @@
-param([string]$Exe, [string]$OutDir)
+﻿param([string]$Exe, [string]$OutDir)
 Add-Type -AssemblyName System.Drawing
 function Draw([int]$n) {
   $bmp = New-Object System.Drawing.Bitmap $n, $n
@@ -9,13 +9,13 @@ function Draw([int]$n) {
   $d = $r * 2; $m = $n * 0.03; $w = $n - 2 * $m
   $path.AddArc($m, $m, $d, $d, 180, 90); $path.AddArc($m + $w - $d, $m, $d, $d, 270, 90)
   $path.AddArc($m + $w - $d, $m + $w - $d, $d, $d, 0, 90); $path.AddArc($m, $m + $w - $d, $d, $d, 90, 90); $path.CloseFigure()
-  $bg = New-Object System.Drawing.Drawing2D.LinearGradientBrush ([System.Drawing.PointF]::new(0, 0)), ([System.Drawing.PointF]::new($n, $n)), ([System.Drawing.Color]::FromArgb(255, 38, 46, 92)), ([System.Drawing.Color]::FromArgb(255, 12, 15, 30))
+  $bg = New-Object System.Drawing.Drawing2D.LinearGradientBrush ([System.Drawing.PointF]::new(0, 0)), ([System.Drawing.PointF]::new($n, $n)), ([System.Drawing.Color]::FromArgb(255, 255, 255, 255)), ([System.Drawing.Color]::FromArgb(255, 226, 234, 250))
   $g.FillPath($bg, $path)
   $cx = $n / 2; $cy = $n / 2
   $rings = @(@(0.36, 'FF60A5FA', 0.82), @(0.25, 'FFF59E0B', 0.62), @(0.14, 'FF34D399', 0.42))
   foreach ($ri in $rings) {
     $rad = $n * $ri[0]; $pw = [Math]::Max(1.5, $n * 0.075)
-    $track = New-Object System.Drawing.Pen ([System.Drawing.Color]::FromArgb(60, 255, 255, 255)), $pw
+    $track = New-Object System.Drawing.Pen ([System.Drawing.Color]::FromArgb(255, 226, 231, 242)), $pw
     $g.DrawEllipse($track, $cx - $rad, $cy - $rad, 2 * $rad, 2 * $rad)
     $c = [System.Drawing.ColorTranslator]::FromHtml('#' + $ri[1].Substring(2))
     $pen = New-Object System.Drawing.Pen $c, $pw

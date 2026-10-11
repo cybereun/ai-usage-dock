@@ -2,38 +2,38 @@
 <html lang="ko"><head><meta charset="utf-8">
 <style>
 *{box-sizing:border-box;margin:0}
-html,body{background:transparent;overflow:hidden;font-family:'Segoe UI','Malgun Gothic',sans-serif;color:#e8ecf8;user-select:none}
+html,body{background:transparent;overflow:hidden;font-family:'Segoe UI','Malgun Gothic',sans-serif;color:#1f2430;user-select:none}
 body{padding:6px 14px 22px}
 body[data-mode=clock]{padding:22px 14px 6px}
-.dock{background:linear-gradient(160deg,rgba(26,31,52,.97),rgba(14,17,30,.97));border:1px solid rgba(255,255,255,.1);border-radius:22px;padding:14px 16px 16px;box-shadow:0 18px 50px rgba(0,0,0,.55),inset 0 1px 0 rgba(255,255,255,.07);
+.dock{background:#fff;border:1px solid #e6e9f0;border-radius:20px;padding:14px 16px 16px;box-shadow:0 12px 36px rgba(30,40,70,.16);
  transform:translateY(-120%);opacity:0;transition:transform .26s cubic-bezier(.2,.9,.25,1),opacity .2s}
 body[data-mode=top] .dock{border-top-left-radius:0;border-top-right-radius:0;border-top:0}
 body[data-mode=clock] .dock{transform:translateY(120%)}
 body.show .dock{transform:none;opacity:1}
-header{display:flex;align-items:center;gap:8px;margin-bottom:12px}
-h1{font-size:14px;font-weight:700;letter-spacing:.2px;flex:1}
-h1 small{font-weight:500;color:#8b93b0;margin-left:8px;font-size:11px}
-button{background:rgba(255,255,255,.07);border:0;color:#cfd6ee;width:28px;height:28px;border-radius:9px;cursor:pointer;font-size:14px;transition:.15s}
-button:hover{background:rgba(255,255,255,.16)}
+header{display:flex;align-items:center;gap:6px;margin-bottom:12px}
+h1{font-size:14px;font-weight:700;flex:1}
+h1 small{font-weight:500;color:#9aa2b5;margin-left:8px;font-size:11px}
+button{background:transparent;border:0;color:#7b849a;width:28px;height:28px;border-radius:9px;cursor:pointer;font-size:15px;transition:.15s}
+button:hover{background:#f0f3f9;color:#1f2430}
 .grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(222px,1fr));gap:10px}
-.card{--c:#60a5fa;background:rgba(255,255,255,.045);border:1px solid rgba(255,255,255,.07);border-radius:16px;padding:11px 12px 10px;position:relative;overflow:hidden}
-.card::before{content:'';position:absolute;left:0;top:0;bottom:0;width:3px;background:var(--c)}
-.top{display:flex;align-items:center;gap:7px;margin-bottom:8px}
-.name{font-weight:700;font-size:14px}
-.lab{font-size:11px;color:#8b93b0;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;flex:1}
-.st{font-size:10px;padding:2px 7px;border-radius:99px;background:rgba(255,255,255,.08);color:#aab2cf;white-space:nowrap}
-.st.login,.st.error{background:rgba(245,158,11,.18);color:#fbbf24;cursor:pointer}
+.card{--c:#3b82f6;background:#f7f9fc;border-radius:14px;padding:11px 12px 10px}
+.top{display:flex;align-items:center;gap:7px;margin-bottom:9px}
+.top::before{content:'';width:8px;height:8px;border-radius:50%;background:var(--c);flex:none}
+.name{font-weight:700;font-size:13.5px}
+.lab{font-size:11px;color:#9aa2b5;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;flex:1}
+.st{font-size:10px;padding:2px 7px;border-radius:99px;background:#e9edf5;color:#7b849a;white-space:nowrap}
+.st.login,.st.error{background:#fff2d9;color:#b7791f;cursor:pointer}
 .rings{display:flex;gap:6px;justify-content:space-around}
 .m{display:flex;align-items:center;gap:8px;flex:1}
 .ring{position:relative;width:54px;height:54px;flex:none}
 .ring svg{transform:rotate(-90deg);width:54px;height:54px}
-.ring circle{fill:none;stroke-width:6;stroke-linecap:round}
-.ring .bg{stroke:rgba(255,255,255,.09)}
-.ring .fg{stroke:var(--k);transition:stroke-dashoffset .8s cubic-bezier(.2,.8,.2,1),stroke .3s;filter:drop-shadow(0 0 4px var(--k))}
+.ring circle{fill:none;stroke-width:5.5;stroke-linecap:round}
+.ring .bg{stroke:#e3e8f1}
+.ring .fg{stroke:var(--k);transition:stroke-dashoffset .8s cubic-bezier(.2,.8,.2,1),stroke .3s}
 .ring b{position:absolute;inset:0;display:grid;place-items:center;font-size:13px;font-weight:700}
-.t{font-size:11px;color:#aab2cf;line-height:1.35}
-.t i{display:block;font-style:normal;color:#6f7899;font-size:10px;margin-top:1px;max-width:64px;word-break:keep-all}
-.empty{padding:26px;text-align:center;color:#8b93b0;font-size:13px;grid-column:1/-1}
+.t{font-size:11px;color:#6b748a;line-height:1.35}
+.t i{display:block;font-style:normal;color:#a3abbd;font-size:10px;margin-top:1px;max-width:64px;word-break:keep-all}
+.empty{padding:26px;text-align:center;color:#9aa2b5;font-size:13px;grid-column:1/-1}
 .spin{animation:s 1s linear infinite;display:inline-block}@keyframes s{to{transform:rotate(360deg)}}
 </style></head>
 <body data-mode="top"><div class="dock" id="dock">

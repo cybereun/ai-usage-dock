@@ -2,22 +2,22 @@
 <html lang="ko"><head><meta charset="utf-8"><title>AI 사용량 — 설정</title>
 <style>
 *{box-sizing:border-box;margin:0}
-body{background:radial-gradient(900px 500px at 10% -10%,#1d2548,transparent),#0f1320;color:#e8ecf8;font-family:'Segoe UI','Malgun Gothic',sans-serif;padding:26px 30px 40px;min-height:100vh}
-h1{font-size:22px;margin-bottom:4px}p.sub{color:#8b93b0;font-size:13px;margin-bottom:22px}
-h2{font-size:13px;color:#8b93b0;letter-spacing:.5px;margin:26px 0 10px;text-transform:uppercase}
-.box{background:rgba(255,255,255,.045);border:1px solid rgba(255,255,255,.08);border-radius:16px;padding:14px 16px}
-.acc{--c:#60a5fa;border-left:4px solid var(--c);margin-bottom:10px}
+body{background:#f5f7fb;color:#1f2430;font-family:'Segoe UI','Malgun Gothic',sans-serif;padding:28px 32px 40px;min-height:100vh}
+h1{font-size:21px;margin-bottom:4px}p.sub{color:#8a93a8;font-size:13px;margin-bottom:20px}
+h2{font-size:12px;color:#9aa2b5;letter-spacing:.5px;margin:26px 0 10px;font-weight:600}
+.box{background:#fff;border:1px solid #e6e9f0;border-radius:14px;padding:14px 16px}
+.acc{--c:#3b82f6;margin-bottom:10px}
 .row{display:flex;gap:8px;align-items:center;flex-wrap:wrap;margin:6px 0}
-.badge{font-weight:700;color:var(--c);min-width:92px}
-input,select{background:#1a2038;border:1px solid #2c3556;color:#e8ecf8;border-radius:9px;padding:7px 10px;font:inherit;font-size:13px;outline:0}
-input:focus,select:focus{border-color:#60a5fa}
+.badge{font-weight:700;min-width:92px}.badge::before{content:'';display:inline-block;width:8px;height:8px;border-radius:50%;background:var(--c);margin-right:7px}
+input,select{background:#f7f9fc;border:1px solid #e1e6f0;color:#1f2430;border-radius:9px;padding:7px 10px;font:inherit;font-size:13px;outline:0}
+input:focus,select:focus{border-color:#3b82f6;background:#fff}
 input.n{width:64px}input.w{flex:1;min-width:160px}
-button{background:#2b3768;color:#fff;border:0;border-radius:9px;padding:7px 13px;font:inherit;font-size:13px;cursor:pointer;transition:.15s}
-button:hover{background:#3b4a8c}button.g{background:rgba(255,255,255,.08)}button.d{background:rgba(248,113,113,.18);color:#fca5a5}
-button.p{background:#3b6df0}
-.msg{font-size:12px;color:#8b93b0}.msg.bad{color:#fbbf24}.msg.ok{color:#4ade80}
+button{background:#eef1f7;color:#3b4560;border:0;border-radius:9px;padding:7px 13px;font:inherit;font-size:13px;cursor:pointer;transition:.15s}
+button:hover{background:#e1e6f0}button.g{background:transparent;color:#7b849a}button.g:hover{background:#eef1f7}button.d{background:transparent;color:#d9534f}button.d:hover{background:#fdecec}
+button.p{background:#3b82f6;color:#fff}button.p:hover{background:#2f6fdb}
+.msg{font-size:12px;color:#9aa2b5}.msg.bad{color:#b7791f}.msg.ok{color:#16a34a}
 label.ck{display:flex;gap:8px;align-items:center;margin:8px 0;font-size:14px}
-.hint{font-size:12px;color:#6f7899;margin-top:8px;line-height:1.6}
+.hint{font-size:12px;color:#9aa2b5;margin-top:8px;line-height:1.6}
 </style></head><body>
 <h1>AI 사용량 설정</h1><p class="sub">같은 AI라도 계정을 여러 개 추가할 수 있어요. 계정마다 로그인이 따로 저장됩니다.</p>
 <h2>계정</h2><div id="list"></div>
