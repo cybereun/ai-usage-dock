@@ -1,0 +1,67 @@
+<!doctype html>
+<html lang="ko"><head><meta charset="utf-8">
+<style>
+*{box-sizing:border-box;margin:0}
+html,body{background:transparent;overflow:hidden;font-family:'Segoe UI','Malgun Gothic',sans-serif;color:#e8ecf8;user-select:none}
+body{padding:6px 14px 22px}
+body[data-mode=clock]{padding:22px 14px 6px}
+.dock{background:linear-gradient(160deg,rgba(26,31,52,.97),rgba(14,17,30,.97));border:1px solid rgba(255,255,255,.1);border-radius:22px;padding:14px 16px 16px;box-shadow:0 18px 50px rgba(0,0,0,.55),inset 0 1px 0 rgba(255,255,255,.07);
+ transform:translateY(-120%);opacity:0;transition:transform .26s cubic-bezier(.2,.9,.25,1),opacity .2s}
+body[data-mode=top] .dock{border-top-left-radius:0;border-top-right-radius:0;border-top:0}
+body[data-mode=clock] .dock{transform:translateY(120%)}
+body.show .dock{transform:none;opacity:1}
+header{display:flex;align-items:center;gap:8px;margin-bottom:12px}
+h1{font-size:14px;font-weight:700;letter-spacing:.2px;flex:1}
+h1 small{font-weight:500;color:#8b93b0;margin-left:8px;font-size:11px}
+button{background:rgba(255,255,255,.07);border:0;color:#cfd6ee;width:28px;height:28px;border-radius:9px;cursor:pointer;font-size:14px;transition:.15s}
+button:hover{background:rgba(255,255,255,.16)}
+.grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(222px,1fr));gap:10px}
+.card{--c:#60a5fa;background:rgba(255,255,255,.045);border:1px solid rgba(255,255,255,.07);border-radius:16px;padding:11px 12px 10px;position:relative;overflow:hidden}
+.card::before{content:'';position:absolute;left:0;top:0;bottom:0;width:3px;background:var(--c)}
+.top{display:flex;align-items:center;gap:7px;margin-bottom:8px}
+.name{font-weight:700;font-size:14px}
+.lab{font-size:11px;color:#8b93b0;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;flex:1}
+.st{font-size:10px;padding:2px 7px;border-radius:99px;background:rgba(255,255,255,.08);color:#aab2cf;white-space:nowrap}
+.st.login,.st.error{background:rgba(245,158,11,.18);color:#fbbf24;cursor:pointer}
+.rings{display:flex;gap:6px;justify-content:space-around}
+.m{display:flex;align-items:center;gap:8px;flex:1}
+.ring{position:relative;width:54px;height:54px;flex:none}
+.ring svg{transform:rotate(-90deg);width:54px;height:54px}
+.ring circle{fill:none;stroke-width:6;stroke-linecap:round}
+.ring .bg{stroke:rgba(255,255,255,.09)}
+.ring .fg{stroke:var(--k);transition:stroke-dashoffset .8s cubic-bezier(.2,.8,.2,1),stroke .3s;filter:drop-shadow(0 0 4px var(--k))}
+.ring b{position:absolute;inset:0;display:grid;place-items:center;font-size:13px;font-weight:700}
+.t{font-size:11px;color:#aab2cf;line-height:1.35}
+.t i{display:block;font-style:normal;color:#6f7899;font-size:10px;margin-top:1px;max-width:64px;word-break:keep-all}
+.empty{padding:26px;text-align:center;color:#8b93b0;font-size:13px;grid-column:1/-1}
+.spin{animation:s 1s linear infinite;display:inline-block}@keyframes s{to{transform:rotate(360deg)}}
+</style></head>
+<body data-mode="top"><div class="dock" id="dock">
+<header><h1>AI 사용량<small id="ago"></small></h1><button id="rf" title="새로고침">⟳</button><button id="gs" title="설정 · 계정 추가">⚙</button></header>
+<div class="grid" id="grid"></div></div>
+<script>
+let S={accounts:[],services:{}};
+const $=id=>document.getElementById(id);
+const C=2*Math.PI*21;
+const col=(p,base)=>p>=80?'#f87171':p>=60?'#fbbf24':base;
+const ring=(p,base,lab,reset)=>`<div class="m"><div class="ring" style="--k:${col(p,base)}"><svg viewBox="0 0 54 54"><circle class="bg" cx="27" cy="27" r="21"/><circle class="fg" cx="27" cy="27" r="21" stroke-dasharray="${C}" stroke-dashoffset="${C*(1-p/100)}"/></svg><b>${p}%</b></div><div class="t">${lab}<i>${reset||''}</i></div></div>`;
+const esc=s=>String(s||'').replace(/[&<>]/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;'}[c]));
+const ago=t=>{if(!t)return'';const m=Math.round((Date.now()-t)/60000);return m<1?'방금':m+'분 전'};
+function render(){
+  const g=$('grid');
+  if(!S.accounts.length){g.innerHTML='<div class="empty">⚙ 설정에서 Claude · Codex · Gemini 계정을 추가하세요</div>';}
+  else g.innerHTML=S.accounts.map(a=>{
+    const sv=S.services[a.service]||{name:a.service,color:'#60a5fa'};
+    const stTxt=a.loading?'<span class="spin">⟳</span> 읽는 중':a.status==='login'?'로그인 필요':a.status==='error'?'읽기 실패':a.status==='manual'?'수동':ago(a.updated);
+    const stCls=a.loading?'':a.status;
+    return `<div class="card" style="--c:${sv.color}" data-id="${a.id}"><div class="top"><span class="name">${esc(sv.name)}</span><span class="lab">${esc(a.label)}</span><span class="st ${stCls}" data-act="${a.status==='login'||a.status==='error'?'login':''}" title="${esc(a.msg)}">${stTxt}</span></div><div class="rings">${ring(a.h5.pct,sv.color,'5시간',a.h5.reset)}${ring(a.wk.pct,sv.color,'주간',a.wk.reset)}</div></div>`}).join('');
+  const t=S.accounts.map(a=>a.updated).filter(Boolean);$('ago').textContent=t.length?ago(Math.max(...t))+' 갱신':'';
+  requestAnimationFrame(()=>api.size($('dock').offsetHeight+30));
+}
+api.getState().then(s=>{S=s;render()});
+api.onState(s=>{S=s;render()});
+api.onVisibility(v=>{document.body.dataset.mode=v.mode;requestAnimationFrame(()=>document.body.classList.toggle('show',v.show))});
+$('rf').onclick=()=>api.refresh();$('gs').onclick=()=>api.openSettings();
+$('grid').onclick=e=>{const st=e.target.closest('[data-act=login]');if(st)api.login(st.closest('.card').dataset.id)};
+setInterval(render,30000);
+</script></body></html>

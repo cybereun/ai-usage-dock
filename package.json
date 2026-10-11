@@ -1,0 +1,12 @@
+{
+  "name": "ai-usage-dock",
+  "version": "0.1.0",
+  "description": "Claude · Codex · Gemini · Grok 등 AI 사용량을 독처럼 보여주는 데스크톱 위젯",
+  "main": "src/main.js",
+  "scripts": {
+    "start": "electron ."
+  },
+  "devDependencies": {
+    "electron": "^33.4.11"
+  }
+}
