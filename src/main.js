@@ -14,7 +14,7 @@ const profileDir = (id) => path.join(app.getPath('userData'), 'profiles', id);
 
 const SERVICES = {
   claude: { name: 'Claude', color: '#d97757', url: 'https://claude.ai/settings/usage', mode: 'auto' },
-  codex: { name: 'Codex', color: '#10a37f', url: 'https://chatgpt.com/codex/settings/usage', mode: 'auto' },
+  codex: { name: 'Codex', color: '#10a37f', url: 'https://chatgpt.com/codex/cloud/settings/usage', mode: 'auto' },
   gemini: { name: 'Gemini', color: '#4f8cff', url: 'https://gemini.google.com/app', mode: 'manual' },
   antigravity: { name: 'Antigravity', color: '#a855f7', url: '', mode: 'manual' },
   grok: { name: 'Grok', color: '#9ca3af', url: 'https://grok.com', mode: 'manual' },
@@ -29,7 +29,7 @@ const WIDTH = 760;
 
 const file = () => path.join(app.getPath('userData'), 'data.json');
 function load() {
-  try { const d = JSON.parse(fs.readFileSync(file(), 'utf8')); store = { accounts: d.accounts || [], settings: { ...DEFAULT_SETTINGS, ...d.settings } }; } catch {}
+  try { const d = JSON.parse(fs.readFileSync(file(), 'utf8')); store = { accounts: d.accounts || [], settings: { ...DEFAULT_SETTINGS, ...d.settings } }; store.accounts.forEach(a => { if (a.url === 'https://chatgpt.com/codex/settings/usage') a.url = SERVICES.codex.url; }); } catch {}
 }
 function save() { try { fs.writeFileSync(file(), JSON.stringify(store, null, 1)); } catch {} }
 function publish() {
@@ -50,8 +50,8 @@ function parseUsage(text) {
     let pct = parseFloat(p[1]);
     const rem = /remaining|left|남음|남았/i.test(p[2] || '') || /remaining|left|남음|남았/i.test(seg.slice(p.index, p.index + 40));
     if (rem) pct = 100 - pct;
-    const r = /(resets?[^\n]{0,40}|재설정[^\n]{0,30}|초기화[^\n]{0,30}|\d+\s*(?:hr|시간)[^\n]{0,20}(?:min|분)?)/i.exec(seg);
-    return { pct: Math.max(0, Math.min(100, Math.round(pct))), reset: r ? r[1].trim() : '' };
+    const r = /(resets?[^\n]{0,40}|재설정[^\n]{0,30}|초기화[^\n]{0,30}|\d+\s*(?:시간|분|hr|min)[^\n]{0,10}(?:후|left|remaining)[^\n]{0,12})/i.exec(seg);
+    return { pct: Math.max(0, Math.min(100, Math.round(pct))), reset: r ? r[1].trim().replace(/^(재설정|resets?)\s*[:：]?\s*/i, '') : '' };
   };
   const h5 = find(/current session|5[\s-]?hour|5시간|현재 세션/i);
   const wk = find(/이번 주|weekly limits?|this week/i) || find(/weekly|per week|week\b|주간/i);
@@ -64,11 +64,28 @@ async function readAccount(acc) {
   if (!acc.url) { acc.status = 'error'; acc.msg = 'URL 이 비어 있어요'; return; }
   const exe = browserExe();
   if (!exe) { acc.status = 'error'; acc.msg = 'Chrome 또는 Edge 가 필요해요'; return; }
-  const html = await new Promise(res => execFile(exe, ['--headless=new', '--disable-gpu', '--no-first-run', '--user-data-dir=' + profileDir(acc.id), '--virtual-time-budget=12000', '--dump-dom', acc.url], { timeout: 45000, maxBuffer: 20 * 1024 * 1024 }, (e, out) => res(out || '')));
-  const text = html.replace(/<(script|style)[\s\S]*?<\/\1>/gi, ' ').replace(/<br\s*\/?>|<\/(p|div|li|h\d|tr|span|button)>/gi, '\n').replace(/<[^>]+>/g, ' ').replace(/&nbsp;/g, ' ').replace(/&amp;/g, '&').replace(/[ \t]+/g, ' ');
-  const usage = parseUsage(text);
+  // 실제 Chrome 창을 화면 밖에 잠깐 띄워 읽고 닫는다 (헤드리스는 봇 검사에 막힘)
+  const port = 9300 + Math.floor(Math.random() * 600);
+  const p = spawn(exe, ['--user-data-dir=' + profileDir(acc.id), '--remote-debugging-port=' + port, '--remote-allow-origins=*', '--no-first-run', '--no-default-browser-check', '--start-minimized', '--window-position=-32000,-32000', '--window-size=900,700', acc.url], { stdio: 'ignore' });
+  let usage = null, text = '', seen = false;
+  for (let i = 0; i < 22 && !usage; i++) {
+    await sleep(1500);
+    const tabs = await httpJson(port, '/json');
+    const list = (tabs || []).filter(x => x.type === 'page' && x.webSocketDebuggerUrl);
+    if (!list.length) continue; seen = true;
+    const host = (() => { try { return new URL(acc.url).hostname; } catch { return ''; } })();
+    list.sort((x, y) => (y.url.includes(host) ? 1 : 0) - (x.url.includes(host) ? 1 : 0));
+    for (const tab of list) {
+      const r = await cdp(tab.webSocketDebuggerUrl, 'Runtime.evaluate', { expression: 'document.body.innerText', returnByValue: true });
+      const tx = (r && r.result && r.result.value) || ''; if (tab === list[0] && tx) text = tx;
+      usage = parseUsage(tx); if (usage) break;
+    }
+  }
+  const v = await httpJson(port, '/json/version');
+  if (v && v.webSocketDebuggerUrl) await cdp(v.webSocketDebuggerUrl, 'Browser.close', {}); else p.kill();
   if (usage) Object.assign(acc, usage, { status: 'ok', msg: '', updated: Date.now() });
-  else if (!text.trim()) { acc.status = 'error'; acc.msg = '페이지를 열지 못했어요 (로그인 창이 열려 있으면 닫아 주세요)'; }
+  else if (!seen) { acc.status = 'error'; acc.msg = 'Chrome 을 열지 못했어요 (로그인 창이 열려 있으면 닫아 주세요)'; }
+  else if (/보안 확인|security check|verify you are human|Just a moment/i.test(text)) { acc.status = 'login'; acc.msg = '보안 확인이 필요해요 → [로그인]에서 한 번 통과해 주세요'; }
   else if (/log ?in|sign ?in|continue with|로그인|accounts\.google/i.test(text)) { acc.status = 'login'; acc.msg = '로그인이 필요해요'; }
   else { acc.status = 'error'; acc.msg = '사용량을 찾지 못했어요 (주소 확인 또는 수동 입력)'; }
 }
