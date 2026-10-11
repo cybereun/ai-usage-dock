@@ -50,11 +50,11 @@ function parseUsage(text) {
     let pct = parseFloat(p[1]);
     const rem = /remaining|left|남음|남았/i.test(p[2] || '') || /remaining|left|남음|남았/i.test(seg.slice(p.index, p.index + 40));
     if (rem) pct = 100 - pct;
-    const r = /(resets?[^\n]{0,40}|초기화[^\n]{0,30}|\d+\s*(?:hr|시간)[^\n]{0,20}(?:min|분)?)/i.exec(seg);
+    const r = /(resets?[^\n]{0,40}|재설정[^\n]{0,30}|초기화[^\n]{0,30}|\d+\s*(?:hr|시간)[^\n]{0,20}(?:min|분)?)/i.exec(seg);
     return { pct: Math.max(0, Math.min(100, Math.round(pct))), reset: r ? r[1].trim() : '' };
   };
-  const h5 = find(/current session|5[\s-]?hour|5시간/i);
-  const wk = find(/weekly|per week|week\b|주간/i);
+  const h5 = find(/current session|5[\s-]?hour|5시간|현재 세션/i);
+  const wk = find(/이번 주|weekly limits?|this week/i) || find(/weekly|per week|week\b|주간/i);
   return h5 || wk ? { h5: h5 || { pct: 0, reset: '' }, wk: wk || { pct: 0, reset: '' } } : null;
 }
 
@@ -83,8 +83,56 @@ async function refresh(id) {
 function openLogin(id) {
   const acc = store.accounts.find(a => a.id === id); if (!acc || !acc.url) return;
   const exe = browserExe(); if (!exe) return;
-  const p = spawn(exe, ['--user-data-dir=' + profileDir(id), '--no-first-run', '--no-default-browser-check', '--new-window', acc.url], { detached: true, stdio: 'ignore' });
-  p.on('exit', () => refresh(acc.id));
+  const port = 9300 + Math.floor(Math.random() * 600);
+  const p = spawn(exe, ['--user-data-dir=' + profileDir(id), '--remote-debugging-port=' + port, '--remote-allow-origins=*', '--no-first-run', '--no-default-browser-check', '--new-window', acc.url], { detached: true, stdio: 'ignore' });
+  let done = false;
+  p.on('exit', () => { clearInterval(poll); if (!done) refresh(acc.id); });
+  // 로그인해서 사용량이 보이면 자동으로 읽고 Chrome 창을 닫는다
+  const poll = setInterval(async () => {
+    if (done) return;
+    const tabs = await httpJson(port, '/json');
+    for (const t of (tabs || []).filter(x => x.type === 'page' && x.webSocketDebuggerUrl)) {
+      const r = await cdp(t.webSocketDebuggerUrl, 'Runtime.evaluate', { expression: 'document.body.innerText', returnByValue: true });
+      const usage = parseUsage((r && r.result && r.result.value) || '');
+      if (usage) {
+        done = true; clearInterval(poll);
+        Object.assign(acc, usage, { status: 'ok', msg: '', updated: Date.now() }); publish();
+        const v = await httpJson(port, '/json/version');
+        if (v && v.webSocketDebuggerUrl) await cdp(v.webSocketDebuggerUrl, 'Browser.close', {}); else p.kill();
+        return;
+      }
+    }
+  }, 3000);
+}
+// ---- 최소 CDP(WebSocket) 클라이언트: 로그인 창 내용을 읽기 위함 ----
+const http = require('http'), net = require('net'), crypto = require('crypto');
+const httpJson = (port, p) => new Promise(res => { http.get({ host: '127.0.0.1', port, path: p }, r => { let d = ''; r.on('data', c => d += c); r.on('end', () => { try { res(JSON.parse(d)); } catch { res(null); } }); }).on('error', () => res(null)); });
+function cdp(wsUrl, method, params) {
+  return new Promise(res => {
+    const u = new URL(wsUrl); const sock = net.connect(+u.port, u.hostname); let buf = Buffer.alloc(0), up = false, text = '';
+    const end = (v) => { clearTimeout(t); sock.destroy(); res(v); };
+    const t = setTimeout(() => end(null), 8000);
+    sock.on('error', () => end(null)); sock.on('close', () => end(null));
+    sock.on('connect', () => sock.write(`GET ${u.pathname} HTTP/1.1\r\nHost: ${u.host}\r\nUpgrade: websocket\r\nConnection: Upgrade\r\nSec-WebSocket-Key: ${crypto.randomBytes(16).toString('base64')}\r\nSec-WebSocket-Version: 13\r\n\r\n`));
+    sock.on('data', d => {
+      buf = Buffer.concat([buf, d]);
+      if (!up) {
+        const i = buf.indexOf('\r\n\r\n'); if (i < 0) return; buf = buf.slice(i + 4); up = true;
+        const pl = Buffer.from(JSON.stringify({ id: 1, method, params })), mask = crypto.randomBytes(4);
+        const h = pl.length < 126 ? Buffer.from([0x81, 0x80 | pl.length]) : pl.length < 65536 ? Buffer.from([0x81, 0xfe, pl.length >> 8, pl.length & 255]) : (() => { const b = Buffer.alloc(10); b[0] = 0x81; b[1] = 0xff; b.writeBigUInt64BE(BigInt(pl.length), 2); return b; })();
+        sock.write(Buffer.concat([h, mask, Buffer.from(pl.map((b, k) => b ^ mask[k % 4]))]));
+      }
+      for (;;) {
+        if (buf.length < 2) return;
+        let len = buf[1] & 127, off = 2;
+        if (len === 126) { if (buf.length < 4) return; len = buf.readUInt16BE(2); off = 4; }
+        else if (len === 127) { if (buf.length < 10) return; len = Number(buf.readBigUInt64BE(2)); off = 10; }
+        if (buf.length < off + len) return;
+        const op = buf[0] & 15, fin = buf[0] & 128; text += op === 8 ? '' : buf.slice(off, off + len).toString('utf8'); buf = buf.slice(off + len);
+        if (fin && (op === 1 || op === 0)) { try { const m = JSON.parse(text); if (m.id === 1) return end(m.result || {}); } catch {} text = ''; }
+      }
+    });
+  });
 }
 
 // ---------- 창 ----------
