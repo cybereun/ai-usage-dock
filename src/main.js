@@ -5,7 +5,7 @@ const zlib = require('zlib');
 
 app.userAgentFallback = app.userAgentFallback.replace(/ Electron\/\S+/, '').replace(/ ai-usage-dock\/\S+/, '');
 // 설정·로그인 정보는 C: 드라이브가 아니라 exe 옆 data 폴더에 저장
-app.setPath('userData', path.join(path.dirname(process.execPath), 'data'));
+try { const dd = path.join(path.dirname(process.execPath), 'data'); fs.mkdirSync(dd, { recursive: true }); fs.accessSync(dd, fs.constants.W_OK); app.setPath('userData', dd); } catch {} // 쓰기 불가(예: Program Files)면 기본 위치 사용
 if (!app.requestSingleInstanceLock()) app.quit();
 const { spawn, execFile } = require('child_process');
 // 구글 로그인은 앱 내장 브라우저를 막으므로, 설치된 Chrome(없으면 Edge)을 계정별 전용 프로필로 사용한다
@@ -21,7 +21,7 @@ const SERVICES = {
   custom: { name: '기타', color: '#f59e0b', url: '', mode: 'manual' },
 };
 
-const DEFAULT_SETTINGS = { topTrigger: true, clockTrigger: true, intervalMin: 3, autoStart: false, topWidth: 420 };
+const DEFAULT_SETTINGS = { topTrigger: true, clockTrigger: true, intervalMin: 10, autoStart: false, topWidth: 420 };
 let store = { accounts: [], settings: { ...DEFAULT_SETTINGS } };
 let widget, settingsWin, tray;
 let pinned = false, visible = false, mode = 'top', widgetH = 200, hideTimer = 0, dwell = 0;
@@ -29,7 +29,7 @@ const WIDTH = 760;
 
 const file = () => path.join(app.getPath('userData'), 'data.json');
 function load() {
-  try { const d = JSON.parse(fs.readFileSync(file(), 'utf8')); store = { accounts: d.accounts || [], settings: { ...DEFAULT_SETTINGS, ...d.settings } }; store.accounts.forEach(a => { if (a.url === 'https://chatgpt.com/codex/settings/usage') a.url = SERVICES.codex.url; }); } catch {}
+  try { const d = JSON.parse(fs.readFileSync(file(), 'utf8')); store = { accounts: d.accounts || [], settings: { ...DEFAULT_SETTINGS, ...d.settings } }; if (store.settings.intervalMin === 3) store.settings.intervalMin = 10; store.accounts.forEach(a => { if (a.url === 'https://chatgpt.com/codex/settings/usage') a.url = SERVICES.codex.url; }); } catch {}
 }
 function save() { try { fs.writeFileSync(file(), JSON.stringify(store, null, 1)); } catch {} }
 function publish() {
@@ -59,7 +59,22 @@ function parseUsage(text) {
 }
 
 const sleep = (ms) => new Promise(r => setTimeout(r, ms));
-const AGY = process.env.LOCALAPPDATA + '\\agy\\bin\\agy.exe';
+// 읽기용 Chrome 창을 작업표시줄에 보이지 않게 숨긴다 (창은 숨겨져도 페이지는 정상 동작).
+// 숨김 도우미(PowerShell)를 앱과 함께 한 번만 띄워 두고, 새 Chrome 의 PID 를 파일로 알려 준다.
+const HIDE_PS = "Add-Type 'using System; using System.Runtime.InteropServices; public class HW { delegate bool EP(IntPtr h, IntPtr l); [DllImport(\"user32.dll\")] static extern bool EnumWindows(EP e, IntPtr l); [DllImport(\"user32.dll\")] static extern bool IsWindowVisible(IntPtr h); [DllImport(\"user32.dll\")] static extern uint GetWindowThreadProcessId(IntPtr h, out uint p); [DllImport(\"user32.dll\")] static extern bool ShowWindow(IntPtr h, int c); public static void HideAll(uint pid) { EnumWindows((h, l) => { uint p; GetWindowThreadProcessId(h, out p); if (p == pid && IsWindowVisible(h)) ShowWindow(h, 0); return true; }, IntPtr.Zero); } }'; $f = '__FILE__'; while (Get-Process -Id __PARENT__ -ErrorAction SilentlyContinue) { try { $now = [DateTimeOffset]::UtcNow.ToUnixTimeMilliseconds(); foreach ($l in [IO.File]::ReadAllLines($f)) { $x = $l.Split(' '); if ($x.Count -eq 2 -and ($now - [int64]$x[1]) -lt 60000) { [HW]::HideAll([uint32]$x[0]) } } } catch {}; Start-Sleep -Milliseconds 30 }";
+let hideFile = '', hider = null;
+function startHider() {
+  try {
+    hideFile = path.join(app.getPath('userData'), 'hide.pids'); fs.writeFileSync(hideFile, '');
+    const script = HIDE_PS.split('__FILE__').join(hideFile.replace(/'/g, "''")).split('__PARENT__').join(String(process.pid));
+    hider = spawn('powershell', ['-NoProfile', '-NonInteractive', '-ExecutionPolicy', 'Bypass', '-EncodedCommand', Buffer.from(script, 'utf16le').toString('base64')], { stdio: 'ignore', windowsHide: true });
+    hider.on('exit', () => { hider = null; });
+  } catch {}
+}
+function hideWindowsOf(pid) {
+  if (!hider) startHider();
+  try { fs.appendFileSync(hideFile, pid + ' ' + Date.now() + '\n'); } catch {}
+}const AGY = process.env.LOCALAPPDATA + '\\agy\\bin\\agy.exe';
 const fmtReset = (iso) => { const ms = Date.parse(iso) - Date.now(); if (!(ms > 0)) return ''; const m = Math.round(ms / 60000), d = Math.floor(m / 1440), h = Math.floor(m % 1440 / 60); return (d ? d + '일 ' : '') + (h ? h + '시간 ' : '') + (d ? '' : (m % 60) + '분 ') + '후 초기화'; };
 async function readAgy(acc) {
   const out = await new Promise(res => execFile(fs.existsSync(AGY) ? AGY : 'agy', ['-p', '/usage', '--print-timeout', '25s'], { timeout: 45000, windowsHide: true }, (e, o) => res(o || '')));
@@ -79,6 +94,7 @@ async function readAccount(acc) {
   // 실제 Chrome 창을 화면 밖에 잠깐 띄워 읽고 닫는다 (헤드리스는 봇 검사에 막힘)
   const port = 9300 + Math.floor(Math.random() * 600);
   const p = spawn(exe, ['--user-data-dir=' + profileDir(acc.id), '--remote-debugging-port=' + port, '--remote-allow-origins=*', '--no-first-run', '--no-default-browser-check', '--start-minimized', '--window-position=-32000,-32000', '--window-size=900,700', acc.url], { stdio: 'ignore' });
+  hideWindowsOf(p.pid);
   let usage = null, text = '', seen = false;
   for (let i = 0; i < 22 && !usage; i++) {
     await sleep(1500);
@@ -188,7 +204,7 @@ function showWidget(m) {
   if (visible && m === mode) return;
   mode = m || mode; visible = true; place(true);
   widget.webContents.send('visibility', { show: true, mode });
-  const stale = store.accounts.some(a => !a.updated || Date.now() - a.updated > 60000);
+  const stale = store.accounts.some(a => !a.updated || Date.now() - a.updated > Math.max(3, store.settings.intervalMin) * 60000);
   if (stale) refresh();
 }
 function hideWidget() {
@@ -248,7 +264,7 @@ let timer;
 function schedule() { clearInterval(timer); timer = setInterval(() => refresh(), Math.max(1, store.settings.intervalMin) * 60000); }
 
 app.whenReady().then(() => {
-  load(); createWidget();
+  load(); createWidget(); startHider();
   tray = new Tray(nativeImage.createFromPath(path.join(__dirname, 'icon.png')).resize({ width: 32, height: 32 })); tray.setToolTip('AI 사용량');
   const menu = () => Menu.buildFromTemplate([
     { label: '지금 보기 (Ctrl+Alt+U)', click: () => togglePin() },
