@@ -1,4 +1,4 @@
-const { app, BrowserWindow, Tray, Menu, ipcMain, screen, nativeImage, globalShortcut } = require('electron');
+const { app, BrowserWindow, Tray, Menu, ipcMain, screen, nativeImage, globalShortcut, powerMonitor } = require('electron');
 const path = require('path');
 const fs = require('fs');
 const zlib = require('zlib');
@@ -204,6 +204,7 @@ function tick() {
   const inTop = s.topTrigger && p.y <= b.y + 1 && Math.abs(p.x - (b.x + b.width / 2)) < s.topWidth / 2;
   const inClock = s.clockTrigger && p.y >= wa.y + wa.height && p.y <= b.y + b.height && p.x >= b.x + b.width - 230;
   const wb = widget.getBounds();
+  if (process.env.AIUD_DEBUG && Date.now() % 1000 < 100) { try { fs.appendFileSync(path.join(app.getPath('userData'), 'debug.log'), JSON.stringify({ p, b, sf: d.scaleFactor, inTop, inClock, visible, pinned, mode, wb }) + '\n'); } catch {} }
   const inWin = visible && p.x >= wb.x - 6 && p.x <= wb.x + wb.width + 6 && p.y >= wb.y - 6 && p.y <= wb.y + wb.height + 6;
   if (inTop || inClock) {
     dwell += 100;
@@ -242,6 +243,7 @@ function makeIcon() {
   return nativeImage.createFromBuffer(Buffer.concat([Buffer.from([137, 80, 78, 71, 13, 10, 26, 10]), chunk('IHDR', ihdr), chunk('IDAT', zlib.deflateSync(raw)), chunk('IEND', Buffer.alloc(0))]));
 }
 
+function logErr(e) { try { fs.appendFileSync(path.join(app.getPath('userData'), 'error.log'), new Date().toISOString() + ' ' + (e && e.stack || e) + '\n'); } catch {} }
 let timer;
 function schedule() { clearInterval(timer); timer = setInterval(() => refresh(), Math.max(1, store.settings.intervalMin) * 60000); }
 
@@ -255,7 +257,12 @@ app.whenReady().then(() => {
     { type: 'separator' }, { label: '종료', click: () => app.exit() }]);
   tray.setContextMenu(menu()); tray.on('click', togglePin); tray.on('double-click', openSettings);
   globalShortcut.register('Control+Alt+U', togglePin);
-  setInterval(tick, 100); schedule();
+  setInterval(() => { try { tick(); } catch (e) { logErr(e); } }, 100); schedule();
+  // 오래 켜 두거나 절전·모니터 변경 뒤에도 독이 멈추지 않도록 주기적으로 상태를 바로잡는다
+  const heal = () => { try { if (!widget || widget.isDestroyed()) { createWidget(); return; } widget.setAlwaysOnTop(true, 'screen-saver'); if (!widget.isVisible()) widget.showInactive(); place(visible); } catch (e) { logErr(e); } };
+  setInterval(heal, 5000);
+  screen.on('display-metrics-changed', heal); screen.on('display-added', heal); screen.on('display-removed', heal);
+  powerMonitor.on('resume', () => setTimeout(heal, 1500)); powerMonitor.on('unlock-screen', () => setTimeout(heal, 1500));
   if (!store.accounts.length) setTimeout(openSettings, 600); else refresh();
 });
 function togglePin() { if (visible) { pinned = false; hideWidget(); } else { pinned = true; showWidget('top'); setTimeout(() => { pinned = false; }, 6000); } }
