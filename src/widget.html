@@ -45,6 +45,7 @@ const $=id=>document.getElementById(id);
 const C=2*Math.PI*21;
 const col=(p,base)=>p>=80?'#f87171':p>=60?'#fbbf24':base;
 const ring=(p,base,lab,reset)=>`<div class="m"><div class="ring" style="--k:${col(p,base)}"><svg viewBox="0 0 54 54"><circle class="bg" cx="27" cy="27" r="21"/><circle class="fg" cx="27" cy="27" r="21" stroke-dasharray="${C}" stroke-dashoffset="${C*(1-p/100)}"/></svg><b>${p}%</b></div><div class="t">${lab}<i>${reset||''}</i></div></div>`;
+const mt=(m,base,lab)=>m.na?`<div class="m"><div class="ring" style="--k:#cbd2e0"><svg viewBox="0 0 54 54"><circle class="bg" cx="27" cy="27" r="21"/></svg><b style="color:#aab2c5">—</b></div><div class="t">${lab}<i>해당 없음</i></div></div>`:ring(m.pct,base,lab,m.reset);
 const esc=s=>String(s||'').replace(/[&<>]/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;'}[c]));
 const ago=t=>{if(!t)return'';const m=Math.round((Date.now()-t)/60000);return m<1?'방금':m+'분 전'};
 function render(){
@@ -54,7 +55,7 @@ function render(){
     const sv=S.services[a.service]||{name:a.service,color:'#60a5fa'};
     const stTxt=a.loading?'<span class="spin">⟳</span> 읽는 중':a.status==='login'?'로그인 필요':a.status==='error'?'읽기 실패':a.status==='manual'?'수동':ago(a.updated);
     const stCls=a.loading?'':a.status;
-    return `<div class="card" style="--c:${sv.color}" data-id="${a.id}"><div class="top"><span class="name">${esc(sv.name)}</span><span class="lab">${esc(a.label)}</span><span class="st ${stCls}" data-act="${a.status==='login'||a.status==='error'?'login':''}" title="${esc(a.msg)}">${stTxt}</span></div><div class="rings">${ring(a.h5.pct,sv.color,'5시간',a.h5.reset)}${ring(a.wk.pct,sv.color,'주간',a.wk.reset)}</div></div>`}).join('');
+    return `<div class="card" style="--c:${sv.color}" data-id="${a.id}"><div class="top"><span class="name">${esc(sv.name)}</span><span class="lab">${esc(a.label)}</span><span class="st ${stCls}" data-act="${a.status==='login'||a.status==='error'?'login':''}" title="${esc(a.msg)}">${stTxt}</span></div><div class="rings">${mt(a.h5,sv.color,'5시간')}${mt(a.wk,sv.color,'주간')}</div></div>`}).join('');
   const t=S.accounts.map(a=>a.updated).filter(Boolean);$('ago').textContent=t.length?ago(Math.max(...t))+' 갱신':'';
   requestAnimationFrame(()=>api.size($('dock').offsetHeight+30));
 }

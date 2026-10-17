@@ -76,16 +76,38 @@ function hideWindowsOf(pid) {
   try { fs.appendFileSync(hideFile, pid + ' ' + Date.now() + '\n'); } catch {}
 }const AGY = process.env.LOCALAPPDATA + '\\agy\\bin\\agy.exe';
 const fmtReset = (iso) => { const ms = Date.parse(iso) - Date.now(); if (!(ms > 0)) return ''; const m = Math.round(ms / 60000), d = Math.floor(m / 1440), h = Math.floor(m % 1440 / 60); return (d ? d + '일 ' : '') + (h ? h + '시간 ' : '') + (d ? '' : (m % 60) + '분 ') + '후 초기화'; };
+const uid = () => Math.random().toString(36).slice(2, 9);
+const AGY_NAMES = { 'gemini models': 'Gemini 모델', 'claude and gpt models': 'Claude·GPT 모델' };
+const agyName = (g) => AGY_NAMES[g.toLowerCase()] || g;
+const clampPct = (n) => Math.max(0, Math.min(100, Math.round(n)));
+function parseAgy(out) {
+  const groups = {};
+  for (const l of out.split(/\r?\n/)) {
+    const c = l.split('\t'); if (c.length < 3) continue;
+    const kind = /five hour/i.test(c[1]) ? 'h5' : /weekly/i.test(c[1]) ? 'wk' : null; if (!kind) continue;
+    const pct = parseFloat(c[2]); if (isNaN(pct)) continue;
+    (groups[c[0].trim()] ||= {})[kind] = { pct: clampPct(100 - pct), reset: fmtReset(c[3]) };
+  }
+  return groups;
+}
+const applyAgy = (acc, g) => Object.assign(acc, { h5: g.h5 || { pct: 0, reset: '', na: true }, wk: g.wk || { pct: 0, reset: '', na: true }, status: 'ok', msg: '', updated: Date.now() });
 async function readAgy(acc) {
   const out = await new Promise(res => execFile(fs.existsSync(AGY) ? AGY : 'agy', ['-p', '/usage', '--print-timeout', '25s'], { timeout: 45000, windowsHide: true }, (e, o) => res(o || '')));
-  const g = (acc.group || 'Gemini Models').toLowerCase();
-  const rows = out.split(/\r?\n/).map(l => l.split('\t')).filter(c => c.length >= 3 && c[0].trim().toLowerCase() === g);
-  const pick = (re) => { const c = rows.find(r => re.test(r[1])); return c ? { pct: Math.max(0, Math.min(100, Math.round(100 - parseFloat(c[2])))), reset: fmtReset(c[3]) } : null; };
-  const h5 = pick(/five hour/i), wk = pick(/weekly/i);
-  if (h5 || wk) Object.assign(acc, { h5: h5 || { pct: 0, reset: '' }, wk: wk || { pct: 0, reset: '' }, status: 'ok', msg: '', updated: Date.now() });
-  else { acc.status = 'error'; acc.msg = out.trim() ? '사용량 형식을 읽지 못했어요' : 'agy CLI 를 실행하지 못했어요 (설치·로그인 확인)'; }
-}
-async function readAccount(acc) {
+  const groups = parseAgy(out);
+  const keyOf = (g) => Object.keys(groups).find(k => k.toLowerCase() === String(g || '').toLowerCase());
+  const mine = keyOf(acc.group || 'Gemini Models');
+  if (!mine) { acc.status = 'error'; acc.msg = Object.keys(groups).length ? '이 그룹의 사용량이 CLI 에 없어요' : (out.trim() ? '사용량 형식을 읽지 못했어요' : 'agy CLI 를 실행하지 못했어요 (설치·로그인 확인)'); return; }
+  applyAgy(acc, groups[mine]);
+  // CLI 에 새 모델 그룹(예: Gemini 4 Argon)이 생기면 카드를 자동으로 추가한다
+  const have = new Set(store.accounts.filter(a => a.service === 'antigravity' && a.mode === 'cli').map(a => String(a.group || 'Gemini Models').toLowerCase()));
+  const ignored = (store.settings.ignoredGroups || []).map(x => x.toLowerCase());
+  const prefix = (acc.label || '').split(' · ')[0];
+  for (const g of Object.keys(groups)) {
+    if (have.has(g.toLowerCase()) || ignored.includes(g.toLowerCase())) continue;
+    have.add(g.toLowerCase());
+    store.accounts.push(applyAgy({ id: uid(), service: 'antigravity', group: g, label: [prefix, agyName(g)].filter(Boolean).join(' · '), url: '', mode: 'cli' }, groups[g]));
+  }
+}async function readAccount(acc) {
   if (acc.mode === 'cli') return readAgy(acc);
   if (acc.mode === 'manual') { acc.status = 'manual'; acc.updated = Date.now(); return; }
   if (!acc.url) { acc.status = 'error'; acc.msg = 'URL 이 비어 있어요'; return; }
@@ -286,7 +308,6 @@ app.on('window-all-closed', (e) => e.preventDefault());
 app.on('second-instance', openSettings);
 
 // ---------- IPC ----------
-const uid = () => Math.random().toString(36).slice(2, 9);
 ipcMain.handle('state', () => ({ accounts: store.accounts, settings: store.settings, services: SERVICES }));
 ipcMain.on('refresh', (_, id) => refresh(id));
 ipcMain.on('login', (_, id) => openLogin(id));
@@ -303,7 +324,7 @@ ipcMain.on('add', (_, { service, label }) => {
   publish(); if (s.mode === 'auto') refresh(store.accounts[store.accounts.length - 1].id);
 });
 ipcMain.on('update', (_, { id, patch }) => { const a = store.accounts.find(x => x.id === id); if (a) { Object.assign(a, patch); if (a.mode === 'manual') { a.status = 'manual'; a.updated = Date.now(); } publish(); if (a.mode === 'cli' && (patch.mode || patch.group)) refresh(a.id); } });
-ipcMain.on('remove', (_, id) => { store.accounts = store.accounts.filter(a => a.id !== id); publish(); });
+ipcMain.on('remove', (_, id) => { const a = store.accounts.find(x => x.id === id); if (a && a.service === 'antigravity' && a.mode === 'cli') (store.settings.ignoredGroups ||= []).push(a.group || 'Gemini Models'); store.accounts = store.accounts.filter(a => a.id !== id); publish(); });
 ipcMain.on('move', (_, { id, dir }) => { const i = store.accounts.findIndex(a => a.id === id), j = i + dir; if (i < 0 || j < 0 || j >= store.accounts.length) return; [store.accounts[i], store.accounts[j]] = [store.accounts[j], store.accounts[i]]; publish(); });
 ipcMain.on('settings', (_, patch) => {
   Object.assign(store.settings, patch);

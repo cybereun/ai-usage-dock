@@ -33,13 +33,15 @@ label.ck{display:flex;gap:8px;align-items:center;margin:8px 0;font-size:14px}
 let S={accounts:[],services:{},settings:{}},sig='';
 const $=id=>document.getElementById(id);
 const esc=s=>String(s??'').replace(/"/g,'&quot;').replace(/</g,'&lt;');
+const gname=g=>({'gemini models':'Gemini 모델','claude and gpt models':'Claude·GPT 모델'})[String(g).toLowerCase()]||g;
+function groupSel(a){const cur=a.group||'Gemini Models';const all=[...new Set(['Gemini Models','Claude and GPT models',...S.accounts.filter(x=>x.service==='antigravity'&&x.group).map(x=>x.group),cur])];return '<select data-k="group">'+all.map(g=>'<option value="'+esc(g)+'"'+(g===cur?' selected':'')+'>'+esc(gname(g))+'</option>').join('')+'</select>'}
 function build(){
   $('ns').innerHTML=Object.entries(S.services).map(([k,v])=>`<option value="${k}">${v.name}</option>`).join('');
   $('list').innerHTML=S.accounts.map(a=>{const v=S.services[a.service]||{name:a.service,color:'#60a5fa'};return `<div class="box acc" style="--c:${v.color}" data-id="${a.id}">
 <div class="row"><span class="badge">${v.name}</span><input class="w" data-k="label" value="${esc(a.label)}" placeholder="별명">
 <select data-k="mode"><option value="auto"${a.mode==='auto'?' selected':''}>자동 읽기</option><option value="manual"${a.mode==='manual'?' selected':''}>수동 입력</option>${a.service==='antigravity'?`<option value="cli"${a.mode==='cli'?' selected':''}>CLI 읽기 (agy)</option>`:''}</select>
 <button class="g" data-a="up">▲</button><button class="g" data-a="dn">▼</button><button class="d" data-a="rm">삭제</button></div>
-${a.mode==='cli'?`<div class="row"><select data-k="group"><option value="Gemini Models"${a.group!=='Claude and GPT models'?' selected':''}>Gemini 모델</option><option value="Claude and GPT models"${a.group==='Claude and GPT models'?' selected':''}>Claude·GPT 모델</option></select><button class="g" data-a="rf">지금 읽기</button><span class="msg">agy CLI 의 /usage 로 자동 읽기</span></div>`:a.mode==='auto'?`<div class="row"><input class="w" data-k="url" value="${esc(a.url)}" placeholder="사용량 화면 주소"><button data-a="login">로그인</button><button class="g" data-a="rf">지금 읽기</button></div>`
+${a.mode==='cli'?`<div class="row">${groupSel(a)}<button class="g" data-a="rf">지금 읽기</button><span class="msg">agy CLI 의 /usage 로 자동 읽기</span></div>`:a.mode==='auto'?`<div class="row"><input class="w" data-k="url" value="${esc(a.url)}" placeholder="사용량 화면 주소"><button data-a="login">로그인</button><button class="g" data-a="rf">지금 읽기</button></div>`
 :`<div class="row">5시간 <input class="n" type="number" min="0" max="100" data-k="h5" value="${a.h5.pct}">% <input class="w" data-k="h5r" value="${esc(a.h5.reset)}" placeholder="초기화 시각 (선택)">
 주간 <input class="n" type="number" min="0" max="100" data-k="wk" value="${a.wk.pct}">% <input class="w" data-k="wkr" value="${esc(a.wk.reset)}" placeholder="초기화 시각 (선택)"></div>`}
 <div class="msg" data-st></div></div>`}).join('')||'<div class="box msg">아직 계정이 없어요. 아래에서 추가하세요.</div>';
