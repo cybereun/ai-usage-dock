@@ -20,6 +20,7 @@ label.ck{display:flex;gap:8px;align-items:center;margin:8px 0;font-size:14px}
 .hint{font-size:12px;color:#9aa2b5;margin-top:8px;line-height:1.6}
 </style></head><body>
 <h1>AI 사용량 설정</h1><p class="sub">같은 AI라도 계정을 여러 개 추가할 수 있어요. 계정마다 로그인이 따로 저장됩니다.</p>
+<div id="upd"></div>
 <h2>계정</h2><div id="list"></div>
 <div class="box"><div class="row"><b>＋ 계정 추가</b>
 <select id="ns"></select><input id="nl" class="w" placeholder="별명 (예: 개인, 회사, 계정2)"><button class="p" id="add">추가</button></div>
@@ -28,6 +29,7 @@ label.ck{display:flex;gap:8px;align-items:center;margin:8px 0;font-size:14px}
 <label class="ck"><input type="checkbox" id="tt"> 화면 맨 위 가운데에 마우스를 대면 나타나기</label>
 <label class="ck"><input type="checkbox" id="ct"> 작업표시줄 시계(오른쪽 아래)에 마우스를 대면 나타나기</label>
 <label class="ck"><input type="checkbox" id="as"> 윈도우 시작 시 자동 실행</label>
+<div class="row">현재 버전 <b id="ver"></b> <button class="g" id="chk">업데이트 확인</button></div>
 <div class="row">자동 갱신 주기 <input id="iv" class="n" type="number" min="1" max="60"> 분 <span class="msg">· 단축키 <b>Ctrl+Alt+U</b> 로 바로 보기 · 트레이 아이콘 클릭도 가능</span></div></div>
 <script>
 let S={accounts:[],services:{},settings:{}},sig='';
@@ -49,7 +51,7 @@ ${a.mode==='cli'?`<div class="row">${groupSel(a)}<button class="g" data-a="rf">�
 function status(){document.querySelectorAll('.acc').forEach(el=>{const a=S.accounts.find(x=>x.id===el.dataset.id);if(!a)return;const m=el.querySelector('[data-st]');
  m.className='msg '+(a.status==='ok'?'ok':a.status==='login'||a.status==='error'?'bad':'');
  m.textContent=a.loading?'읽는 중…':a.status==='ok'?`읽기 성공 · 5시간 ${a.h5.pct}% · 주간 ${a.wk.pct}%`:a.status==='login'?'로그인이 필요해요 → [로그인] 후 창을 닫으면 자동으로 읽어요':a.status==='error'?a.msg:a.status==='manual'?'수동 입력 값을 사용 중':''})}
-function sync(s){S=s;if(!$('ns').options.length)$('ns').innerHTML=Object.entries(S.services).map(([k,v])=>`<option value="${k}">${v.name}</option>`).join('');const n=S.accounts.map(a=>a.id+a.mode+a.service).join();if(n!==sig){sig=n;build()}status();
+function sync(s){S=s;$('upd').innerHTML=S.update?`<div class="box" style="margin-bottom:14px;background:#eaf2ff;border-color:#cfe0ff"><b>새 버전 v${S.update.version} 이 나왔어요.</b> <button class="p" id="upb">받으러 가기</button></div>`:'';if(S.update)$('upb').onclick=()=>api.openUpdate();$('ver').textContent='현재 v'+(S.version||'');if(!$('ns').options.length)$('ns').innerHTML=Object.entries(S.services).map(([k,v])=>`<option value="${k}">${v.name}</option>`).join('');const n=S.accounts.map(a=>a.id+a.mode+a.service).join();if(n!==sig){sig=n;build()}status();
  $('tt').checked=S.settings.topTrigger;$('ct').checked=S.settings.clockTrigger;$('as').checked=S.settings.autoStart;if(document.activeElement!==$('iv'))$('iv').value=S.settings.intervalMin}
 api.getState().then(sync);api.onState(sync);
 $('add').onclick=()=>{api.add({service:$('ns').value,label:$('nl').value.trim()});$('nl').value=''};
@@ -59,5 +61,6 @@ $('list').onchange=e=>{const el=e.target,id=el.closest('.acc').dataset.id,k=el.d
   if(k==='h5')patch.h5.pct=p(el.value);if(k==='h5r')patch.h5.reset=el.value;if(k==='wk')patch.wk.pct=p(el.value);if(k==='wkr')patch.wk.reset=el.value;api.update(id,patch)}};
 $('list').onclick=e=>{const b=e.target.closest('[data-a]');if(!b)return;const id=b.closest('.acc').dataset.id;({login:()=>api.login(id),rf:()=>api.refresh(id),up:()=>api.move(id,-1),dn:()=>api.move(id,1),rm:()=>confirm('이 계정을 삭제할까요?')&&api.remove(id)})[b.dataset.a]()};
 $('tt').onchange=()=>api.setSettings({topTrigger:$('tt').checked});$('ct').onchange=()=>api.setSettings({clockTrigger:$('ct').checked});
+$('chk').onclick=()=>{api.checkUpdate();$('chk').textContent='확인 중…';setTimeout(()=>$('chk').textContent=S.update?'새 버전이 있어요':'최신 버전이에요',2500)};
 $('as').onchange=()=>api.setSettings({autoStart:$('as').checked});$('iv').onchange=()=>api.setSettings({intervalMin:Math.max(1,+$('iv').value||3)});
 </script></body></html>

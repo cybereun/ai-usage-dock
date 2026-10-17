@@ -1,4 +1,4 @@
-const { app, BrowserWindow, Tray, Menu, ipcMain, screen, nativeImage, globalShortcut, powerMonitor } = require('electron');
+const { app, BrowserWindow, Tray, Menu, ipcMain, screen, nativeImage, globalShortcut, powerMonitor, shell } = require('electron');
 const path = require('path');
 const fs = require('fs');
 const zlib = require('zlib');
@@ -33,7 +33,7 @@ function load() {
 }
 function save() { try { fs.writeFileSync(file(), JSON.stringify(store, null, 1)); } catch {} }
 function publish() {
-  const payload = { accounts: store.accounts, settings: store.settings, services: SERVICES };
+  const payload = { accounts: store.accounts, settings: store.settings, services: SERVICES, update, version: app.getVersion() };
   for (const w of [widget, settingsWin]) if (w && !w.isDestroyed()) w.webContents.send('state', payload);
   save();
 }
@@ -214,15 +214,22 @@ function createWidget() {
   widget.once('ready-to-show', () => { widget.showInactive(); place(false); });
 }
 function place(show) {
-  const p = screen.getCursorScreenPoint();
-  const d = screen.getDisplayNearestPoint(p);
-  const b = d.bounds, wa = d.workArea;
   const h = widgetH;
-  if (!show) { widget.setBounds({ x: b.x, y: -h - 200, width: WIDTH, height: h }); return; }
-  if (mode === 'clock') widget.setBounds({ x: b.x + b.width - WIDTH - 6, y: wa.y + wa.height - h + 6, width: WIDTH, height: h });
-  else widget.setBounds({ x: Math.round(b.x + (b.width - WIDTH) / 2), y: b.y, width: WIDTH, height: h });
-}
-function showWidget(m) {
+  let b;
+  if (!show) {
+    // 숨길 때는 항상 주 모니터 위쪽 화면 밖에 둔다 (모니터마다 배율이 달라 크기가 틀어지는 것을 방지)
+    const pb = screen.getPrimaryDisplay().bounds;
+    b = { x: pb.x, y: pb.y - h - 300, width: WIDTH, height: h };
+  } else {
+    const d = screen.getDisplayNearestPoint(screen.getCursorScreenPoint());
+    const db = d.bounds, wa = d.workArea;
+    b = mode === 'clock'
+      ? { x: db.x + db.width - WIDTH - 6, y: wa.y + wa.height - h + 6, width: WIDTH, height: h }
+      : { x: Math.round(db.x + (db.width - WIDTH) / 2), y: db.y, width: WIDTH, height: h };
+  }
+  // 다른 배율의 모니터로 옮길 때 첫 호출은 위치만 반영되고 크기가 틀어지므로 두 번 적용한다
+  widget.setBounds(b); widget.setBounds(b);
+}function showWidget(m) {
   if (visible && m === mode) return;
   mode = m || mode; visible = true; place(true);
   widget.webContents.send('visibility', { show: true, mode });
@@ -299,6 +306,7 @@ app.whenReady().then(() => {
   // 오래 켜 두거나 절전·모니터 변경 뒤에도 독이 멈추지 않도록 주기적으로 상태를 바로잡는다
   const heal = () => { try { if (!widget || widget.isDestroyed()) { createWidget(); return; } widget.setAlwaysOnTop(true, 'screen-saver'); if (!widget.isVisible()) widget.showInactive(); place(visible); } catch (e) { logErr(e); } };
   setInterval(heal, 5000);
+  setTimeout(checkUpdate, 10000); setInterval(checkUpdate, 12 * 3600 * 1000);
   screen.on('display-metrics-changed', heal); screen.on('display-added', heal); screen.on('display-removed', heal);
   powerMonitor.on('resume', () => setTimeout(heal, 1500)); powerMonitor.on('unlock-screen', () => setTimeout(heal, 1500));
   if (!store.accounts.length) setTimeout(openSettings, 600); else refresh();
@@ -307,8 +315,22 @@ function togglePin() { if (visible) { pinned = false; hideWidget(); } else { pin
 app.on('window-all-closed', (e) => e.preventDefault());
 app.on('second-instance', openSettings);
 
+// ---------- 업데이트 확인 (알림만: 새 버전이 있으면 릴리즈 페이지로 안내) ----------
+let update = null;
+const newer = (a, b) => { const x = String(a).replace(/^v/, '').split('.').map(Number), y = String(b).replace(/^v/, '').split('.').map(Number); for (let i = 0; i < 3; i++) { if ((x[i] || 0) !== (y[i] || 0)) return (x[i] || 0) > (y[i] || 0); } return false; };
+function checkUpdate() {
+  return new Promise(res => {
+    const req = require('https').get({ host: 'api.github.com', path: '/repos/cybereun/ai-usage-dock/releases/latest', headers: { 'User-Agent': 'ai-usage-dock', Accept: 'application/vnd.github+json' }, timeout: 15000 }, r => {
+      let d = ''; r.on('data', c => d += c);
+      r.on('end', () => { try { const j = JSON.parse(d); update = j.tag_name && newer(j.tag_name, process.env.AIUD_FAKE_VERSION || app.getVersion()) ? { version: String(j.tag_name).replace(/^v/, ''), url: j.html_url } : null; } catch {} publish(); res(update); });
+    });
+    req.on('error', () => res(null)); req.on('timeout', () => { req.destroy(); res(null); });
+  });
+}
+ipcMain.on('checkUpdate', () => checkUpdate());
+ipcMain.on('openUpdate', () => { if (update && /^https:\/\/github\.com\//.test(update.url)) shell.openExternal(update.url); });
 // ---------- IPC ----------
-ipcMain.handle('state', () => ({ accounts: store.accounts, settings: store.settings, services: SERVICES }));
+ipcMain.handle('state', () => ({ accounts: store.accounts, settings: store.settings, services: SERVICES, update, version: app.getVersion() }));
 ipcMain.on('refresh', (_, id) => refresh(id));
 ipcMain.on('login', (_, id) => openLogin(id));
 ipcMain.on('openSettings', openSettings);

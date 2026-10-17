@@ -13,5 +13,7 @@ contextBridge.exposeInMainWorld('api', {
   update: (id, patch) => send('update', { id, patch }),
   remove: (id) => send('remove', id),
   move: (id, dir) => send('move', { id, dir }),
+  checkUpdate: () => send('checkUpdate'),
+  openUpdate: () => send('openUpdate'),
   setSettings: (p) => send('settings', p),
 });

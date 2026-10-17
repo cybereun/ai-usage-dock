@@ -1,6 +1,6 @@
 ﻿{
   "name": "ai-usage-dock",
-  "version": "1.0.2",
+  "version": "1.0.3",
   "description": "Claude 쨌 Codex 쨌 Gemini 쨌 Grok ??AI ?ъ슜?됱쓣 ?낆쿂??蹂댁뿬二쇰뒗 ?곗뒪?ы넲 ?꾩젽",
   "main": "src/main.js",
   "scripts": {

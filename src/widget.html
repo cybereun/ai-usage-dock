@@ -33,12 +33,13 @@ button:hover{background:#f0f3f9;color:#1f2430}
 .ring b{position:absolute;inset:0;display:grid;place-items:center;font-size:13px;font-weight:700}
 .t{font-size:11px;color:#6b748a;line-height:1.35}
 .t i{display:block;font-style:normal;color:#a3abbd;font-size:10px;margin-top:1px;max-width:110px;word-break:keep-all}
+.upd{display:flex;align-items:center;gap:8px;background:#eaf2ff;color:#2f5fb3;border-radius:10px;padding:7px 12px;font-size:12px;margin-bottom:10px}.upd a{margin-left:auto;color:#2f6fdb;font-weight:700;cursor:pointer}
 .empty{padding:26px;text-align:center;color:#9aa2b5;font-size:13px;grid-column:1/-1}
 .spin{animation:s 1s linear infinite;display:inline-block}@keyframes s{to{transform:rotate(360deg)}}
 </style></head>
 <body data-mode="top"><div class="dock" id="dock">
 <header><h1>AI 사용량<small id="ago"></small></h1><button id="rf" title="새로고침">⟳</button><button id="gs" title="설정 · 계정 추가">⚙</button></header>
-<div class="grid" id="grid"></div></div>
+<div id="upd"></div><div class="grid" id="grid"></div></div>
 <script>
 let S={accounts:[],services:{}};
 const $=id=>document.getElementById(id);
@@ -49,6 +50,7 @@ const mt=(m,base,lab)=>m.na?`<div class="m"><div class="ring" style="--k:#cbd2e0
 const esc=s=>String(s||'').replace(/[&<>]/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;'}[c]));
 const ago=t=>{if(!t)return'';const m=Math.round((Date.now()-t)/60000);return m<1?'방금':m+'분 전'};
 function render(){
+  upd.innerHTML=S.update?`<div class="upd">새 버전 v${esc(S.update.version)} 사용 가능 <a id="upl">받기</a></div>`:'';if(S.update)upl.onclick=()=>api.openUpdate();
   const g=$('grid');
   if(!S.accounts.length){g.innerHTML='<div class="empty">⚙ 설정에서 Claude · Codex · Gemini 계정을 추가하세요</div>';}
   else g.innerHTML=S.accounts.map(a=>{
