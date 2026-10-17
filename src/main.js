@@ -74,7 +74,15 @@ function startHider() {
 function hideWindowsOf(pid) {
   if (!hider) startHider();
   try { fs.appendFileSync(hideFile, pid + ' ' + Date.now() + '\n'); } catch {}
-}const AGY = process.env.LOCALAPPDATA + '\\agy\\bin\\agy.exe';
+}// 읽기용 Chrome 이 쌓는 캐시·임시 데이터를 지워 로그인 폴더가 커지지 않게 한다 (쿠키·로그인은 유지)
+const JUNK_TOP = ['DeferredBrowserMetrics', 'WasmTtsEngine', 'ActorSafetyLists', 'GrShaderCache', 'ShaderCache', 'GraphiteDawnCache', 'DawnGraphiteCache', 'DawnWebGPUCache', 'component_crx_cache', 'optimization_guide_model_store', 'OptGuideOnDeviceModel', 'Crashpad', 'BrowserMetrics', 'Safe Browsing', 'segmentation_platform', 'extensions_crx_cache', 'Subresource Filter', 'OnDeviceHeadSuggestModel', 'screen_ai', 'AutofillStates', 'FileTypePolicies', 'MEIPreload', 'PrivacySandboxAttestationsPreloaded', 'TrustTokenKeyCommitments', 'WidevineCdm', 'Certificate Revocation Lists'];
+const JUNK_DEFAULT = ['Cache', 'Code Cache', 'GPUCache', 'DawnCache', 'Service Worker', 'File System', 'Extensions', 'blob_storage', 'shared_proto_db', 'optimization_guide_prediction_model_downloads'];
+function cleanProfile(dir) {
+  const rm = (p) => fs.rm(p, { recursive: true, force: true }, () => {});
+  for (const n of JUNK_TOP) rm(path.join(dir, n));
+  for (const n of JUNK_DEFAULT) rm(path.join(dir, 'Default', n));
+}
+function cleanAllProfiles() { try { for (const d of fs.readdirSync(path.join(app.getPath('userData'), 'profiles'))) cleanProfile(profileDir(d)); } catch {} }const AGY = process.env.LOCALAPPDATA + '\\agy\\bin\\agy.exe';
 const fmtReset = (iso) => { const ms = Date.parse(iso) - Date.now(); if (!(ms > 0)) return ''; const m = Math.round(ms / 60000), d = Math.floor(m / 1440), h = Math.floor(m % 1440 / 60); return (d ? d + '일 ' : '') + (h ? h + '시간 ' : '') + (d ? '' : (m % 60) + '분 ') + '후 초기화'; };
 const uid = () => Math.random().toString(36).slice(2, 9);
 const AGY_NAMES = { 'gemini models': 'Gemini 모델', 'claude and gpt models': 'Claude·GPT 모델' };
@@ -115,7 +123,7 @@ async function readAgy(acc) {
   if (!exe) { acc.status = 'error'; acc.msg = 'Chrome 또는 Edge 가 필요해요'; return; }
   // 실제 Chrome 창을 화면 밖에 잠깐 띄워 읽고 닫는다 (헤드리스는 봇 검사에 막힘)
   const port = 9300 + Math.floor(Math.random() * 600);
-  const p = spawn(exe, ['--user-data-dir=' + profileDir(acc.id), '--remote-debugging-port=' + port, '--remote-allow-origins=*', '--no-first-run', '--no-default-browser-check', '--start-minimized', '--window-position=-32000,-32000', '--window-size=900,700', acc.url], { stdio: 'ignore' });
+  const p = spawn(exe, ['--user-data-dir=' + profileDir(acc.id), '--remote-debugging-port=' + port, '--remote-allow-origins=*', '--no-first-run', '--no-default-browser-check', '--disk-cache-size=1', '--media-cache-size=1', '--disable-component-update', '--start-minimized', '--window-position=-32000,-32000', '--window-size=900,700', acc.url], { stdio: 'ignore' });
   hideWindowsOf(p.pid);
   let usage = null, text = '', seen = false;
   for (let i = 0; i < 22 && !usage; i++) {
@@ -133,6 +141,7 @@ async function readAgy(acc) {
   }
   const v = await httpJson(port, '/json/version');
   if (v && v.webSocketDebuggerUrl) await cdp(v.webSocketDebuggerUrl, 'Browser.close', {}); else p.kill();
+  setTimeout(() => cleanProfile(profileDir(acc.id)), 3000);
   if (usage) Object.assign(acc, usage, { status: 'ok', msg: '', updated: Date.now() });
   else if (!seen) { acc.status = 'error'; acc.msg = 'Chrome 을 열지 못했어요 (로그인 창이 열려 있으면 닫아 주세요)'; }
   else if (/보안 확인|security check|verify you are human|Just a moment/i.test(text)) { acc.status = 'login'; acc.msg = '보안 확인이 필요해요 → [로그인]에서 한 번 통과해 주세요'; }
@@ -153,7 +162,7 @@ function openLogin(id) {
   const port = 9300 + Math.floor(Math.random() * 600);
   const p = spawn(exe, ['--user-data-dir=' + profileDir(id), '--remote-debugging-port=' + port, '--remote-allow-origins=*', '--no-first-run', '--no-default-browser-check', '--new-window', acc.url], { detached: true, stdio: 'ignore' });
   let done = false;
-  p.on('exit', () => { clearInterval(poll); if (!done) refresh(acc.id); });
+  p.on('exit', () => { clearInterval(poll); setTimeout(() => cleanProfile(profileDir(id)), 3000); if (!done) refresh(acc.id); });
   // 로그인해서 사용량이 보이면 자동으로 읽고 Chrome 창을 닫는다
   const poll = setInterval(async () => {
     if (done) return;
@@ -293,7 +302,7 @@ let timer;
 function schedule() { clearInterval(timer); timer = setInterval(() => refresh(), Math.max(1, store.settings.intervalMin) * 60000); }
 
 app.whenReady().then(() => {
-  load(); createWidget(); startHider();
+  load(); createWidget(); startHider(); setTimeout(cleanAllProfiles, 20000);
   tray = new Tray(nativeImage.createFromPath(path.join(__dirname, 'icon.png')).resize({ width: 32, height: 32 })); tray.setToolTip('AI 사용량');
   const menu = () => Menu.buildFromTemplate([
     { label: '지금 보기 (Ctrl+Alt+U)', click: () => togglePin() },
